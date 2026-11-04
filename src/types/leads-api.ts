@@ -202,14 +202,17 @@ export interface ApiLeadCall {
   caller_name?: string;
   phone_number: string | null;
   duration_seconds: number | null;
+  duration_formatted?: string;
+  duration_input?: string;
   outcome: string | null;
   notes: string | null;
   recording_url: string | null;
   next_followup_at: string | null;
   next_action: string | null;
   created_by?: number | null;
-  created_by_name?: string;
+  created_by_name?: string | null;
   created_at: string;
+  remaining_seconds?: number;
 }
 
 export type ApiActivityType =

@@ -22,6 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/auth";
 import { useDataSource } from "@/context/data-source";
 import { CALL_OUTCOMES, COUNSELORS, counselorName } from "@/data/lead-lookups";
+import { parseCallDuration, describeCallDuration } from "@/lib/call-duration";
+import { apiErrorMessage } from "@/lib/api";
 import { formatDateToNepalIso, toNepalIso } from "@/lib/leads-format";
 import { useAddCall, useAddFollowup, useAssignLead } from "@/hooks/use-leads";
 import { useCounselors } from "@/hooks/use-users";
@@ -93,6 +95,7 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
   const assignLead = useAssignLead();
   const counselorsQ = useCounselors("", undefined, !isMock);
   const [call, setCall] = useState<CallForm>(EMPTY_CALL);
+  const [durationError, setDurationError] = useState("");
   const [fu, setFu] = useState<FollowUpForm>(EMPTY_FU);
   const [assignTo, setAssignTo] = useState("");
 
@@ -118,6 +121,13 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
   }
 
   function submitCall() {
+    const durationInput = call.duration.trim();
+    if (durationInput && parseCallDuration(durationInput) === null) {
+      setDurationError("Enter a valid duration, such as 4:19, 4.19, 4m19s, or 259.");
+      return;
+    }
+    setDurationError("");
+
     // Mock path (or a lead with no backend id) can't persist — keep the toast.
     if (isMock || lead?.apiId == null) {
       done("Call logged");
@@ -127,10 +137,10 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
     addCall.mutate(
       {
         call_timestamp: new Date().toISOString(),
-        caller: user?.id ?? null,
+        caller: user?.name ?? "Unknown",
         direction: call.direction,
         outcome: call.outcome || null,
-        duration_seconds: call.duration ? Math.round(Number(call.duration) * 60) : null,
+        duration_input: durationInput || undefined,
         recording_url: call.recording.trim() || null,
         notes: call.notes.trim() || null,
         next_followup_at: call.nextFollowUp ? toNepalIso(call.nextFollowUp) : null,
@@ -142,6 +152,7 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
           setCall(EMPTY_CALL);
           onClose();
         },
+        onError: (error) => setDurationError(apiErrorMessage(error, "Could not log call")),
       },
     );
   }
@@ -215,14 +226,31 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Duration (minutes)</Label>
+                <Label htmlFor="call-duration">Duration</Label>
                 <Input
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 4"
+                  id="call-duration"
+                  type="text"
+                  inputMode="text"
+                  placeholder="MM:SS, e.g. 4:19"
                   value={call.duration}
-                  onChange={(e) => setC("duration", e.target.value)}
+                  aria-invalid={Boolean(durationError)}
+                  aria-describedby={durationError ? "call-duration-error" : "call-duration-preview"}
+                  onChange={(e) => {
+                    setC("duration", e.target.value);
+                    setDurationError("");
+                  }}
                 />
+                <p className="text-muted-foreground text-xs">MM:SS, e.g. 4:19</p>
+                {call.duration.trim() && parseCallDuration(call.duration) !== null && (
+                  <p id="call-duration-preview" className="text-muted-foreground text-xs">
+                    {describeCallDuration(parseCallDuration(call.duration) ?? 0)}
+                  </p>
+                )}
+                {durationError && (
+                  <p id="call-duration-error" className="text-destructive text-xs" role="alert">
+                    {durationError}
+                  </p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label>Recording link</Label>
